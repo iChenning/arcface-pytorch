@@ -8,15 +8,12 @@ import torch.distributed as dist
 import torch.nn.functional as F
 import torch.utils.data.distributed
 from torch.nn.utils import clip_grad_norm_
-from torch.utils.data import DataLoader
 
-import backbones
-import losses
 from config import config as cfg
-from dataset_my import MyDataset, normal_trans, DataLoaderX
+from utils.data.dataset_torch import MyDataset, normal_trans
+from utils.data.dataset_preload import DataLoaderX
 from partial_fc import PartialFC
-# from utils.utils_callbacks import CallBackVerification, CallBackLogging, CallBackModelCheckpoint
-from utils.utils_callbacks import CallBackLogging, CallBackModelCheckpoint
+from utils.utils_callbacks import CallBackVerification, CallBackLogging, CallBackModelCheckpoint
 from utils.utils_logging import AverageMeter, init_logging
 from utils.utils_amp import MaxClipGradScaler
 
@@ -24,7 +21,6 @@ torch.backends.cudnn.benchmark = True
 
 
 def main(args):
-
     world_size = int(os.environ['WORLD_SIZE'])
     rank = int(os.environ['RANK'])
     dist_url = "tcp://{}:{}".format(os.environ["MASTER_ADDR"], os.environ["MASTER_PORT"])
@@ -43,9 +39,8 @@ def main(args):
     train_transforms, _ = normal_trans(112)
     trainset = MyDataset(args.txt_path, train_transforms)
     train_sampler = torch.utils.data.distributed.DistributedSampler(trainset)
-    train_loader = DataLoaderX(
-        local_rank=local_rank, dataset=trainset, batch_size=cfg.batch_size,
-        sampler=train_sampler, num_workers=0, pin_memory=True, drop_last=True)
+    train_loader = DataLoaderX(local_rank=local_rank, dataset=trainset, batch_size=cfg.batch_size,
+                               sampler=train_sampler, num_workers=0, pin_memory=True, drop_last=True)
 
     dropout = 0.4 if cfg.dataset is "webface" else 0
     backbone = eval("backbones.{}".format(args.network))(False, dropout=dropout, fp16=cfg.fp16).to(local_rank)
@@ -89,7 +84,7 @@ def main(args):
     total_step = int(len(trainset) / cfg.batch_size / world_size * cfg.num_epoch)
     if rank is 0: logging.info("Total Step is: %d" % total_step)
 
-    # callback_verification = CallBackVerification(2000, rank, cfg.val_targets, cfg.rec)
+    callback_verification = CallBackVerification(2000, rank, cfg.val_targets, cfg.rec)
     callback_logging = CallBackLogging(50, rank, total_step, cfg.batch_size, world_size, None)
     callback_checkpoint = CallBackModelCheckpoint(rank, cfg.output)
 
@@ -105,8 +100,6 @@ def main(args):
             features = F.normalize(backbone(img))
 
             x_grad, loss_v = module_partial_fc.forward_backward(label, features, opt_pfc)
-            # if rank == 0:
-            #     print('loss:', loss_v)
             if cfg.fp16:
                 features.backward(grad_scaler.scale(x_grad))
                 grad_scaler.unscale_(opt_backbone)
@@ -124,7 +117,7 @@ def main(args):
             opt_pfc.zero_grad()
             loss.update(loss_v, 1)
             callback_logging(global_step, loss, epoch, cfg.fp16, grad_scaler)
-            # callback_verification(global_step, backbone)
+            callback_verification(global_step, backbone)
         callback_checkpoint(global_step, backbone, module_partial_fc)
         scheduler_backbone.step()
         scheduler_pfc.step()
