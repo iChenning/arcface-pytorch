@@ -9,10 +9,16 @@ import torch.nn.functional as F
 import torch.utils.data.distributed
 from torch.nn.utils import clip_grad_norm_
 
+import utils.backbones as backbones
+import utils.fc as losses
+from utils.fc.partial_fc import PartialFC
+
 from config import config as cfg
-from utils.data.dataset_torch import MyDataset, normal_trans
+from utils.data.augment import train_trans
+from utils.data.dataset import MyDataset
 from utils.data.dataset_preload import DataLoaderX
-from partial_fc import PartialFC
+from torch.utils.data import DataLoader
+
 from utils.utils_callbacks import CallBackVerification, CallBackLogging, CallBackModelCheckpoint
 from utils.utils_logging import AverageMeter, init_logging
 from utils.utils_amp import MaxClipGradScaler
@@ -21,6 +27,7 @@ torch.backends.cudnn.benchmark = True
 
 
 def main(args):
+    # dist
     world_size = int(os.environ['WORLD_SIZE'])
     rank = int(os.environ['RANK'])
     dist_url = "tcp://{}:{}".format(os.environ["MASTER_ADDR"], os.environ["MASTER_PORT"])
@@ -36,14 +43,18 @@ def main(args):
     log_root = logging.getLogger()
     init_logging(log_root, rank, cfg.output)
 
-    train_transforms, _ = normal_trans(112)
+    # data
+    train_transforms = train_trans(cfg.img_size)
     trainset = MyDataset(args.txt_path, train_transforms)
     train_sampler = torch.utils.data.distributed.DistributedSampler(trainset)
-    train_loader = DataLoaderX(local_rank=local_rank, dataset=trainset, batch_size=cfg.batch_size,
-                               sampler=train_sampler, num_workers=0, pin_memory=True, drop_last=True)
+    # train_loader = DataLoaderX(local_rank=local_rank, dataset=trainset, batch_size=cfg.batch_size,
+    #                            sampler=train_sampler, num_workers=8, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(trainset, cfg.batch_size, shuffle=False, num_workers=8,
+                              pin_memory=True, sampler=train_sampler, drop_last=True)
 
+    # net
     dropout = 0.4 if cfg.dataset is "webface" else 0
-    backbone = eval("backbones.{}".format(args.network))(False, dropout=dropout, fp16=cfg.fp16).to(local_rank)
+    backbone = backbones.__dict__[args.network](pretrained=False, dropout=dropout, fp16=cfg.fp16).to(local_rank)
 
     if args.resume:
         try:
@@ -60,12 +71,13 @@ def main(args):
         module=backbone, broadcast_buffers=False, device_ids=[local_rank])
     backbone.train()
 
-    margin_softmax = eval("losses.{}".format(args.loss))()
+    margin_softmax = losses.__dict__[args.loss]()
     module_partial_fc = PartialFC(
         rank=rank, local_rank=local_rank, world_size=world_size, resume=args.resume,
         batch_size=cfg.batch_size, margin_softmax=margin_softmax, num_classes=cfg.num_classes,
         sample_rate=cfg.sample_rate, embedding_size=cfg.embedding_size, prefix=cfg.output)
 
+    # optimizer
     opt_backbone = torch.optim.SGD(
         params=[{'params': backbone.parameters()}],
         lr=cfg.lr / 512 * cfg.batch_size * world_size,
@@ -128,8 +140,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch ArcFace Training')
     parser.add_argument('--txt_path', type=str, default='data_list/train_CASIA-WebFace_list.txt')
     parser.add_argument('--local_rank', type=int, default=0, help='local_rank')
-    parser.add_argument('--network', type=str, default='iresnet34', help='backbone network')
-    parser.add_argument('--loss', type=str, default='CosFace', help='loss function')
+    parser.add_argument('--network', type=str, default='mobilev3', help='backbone network')
+    parser.add_argument('--loss', type=str, default='cosloss', help='loss function')
     parser.add_argument('--resume', type=int, default=0, help='model resuming')
     args_ = parser.parse_args()
     main(args_)

@@ -48,7 +48,6 @@ import cv2
 import numpy as np
 import torch
 from skimage import transform as trans
-import backbones
 
 
 class Embedding(object):

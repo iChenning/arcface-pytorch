@@ -2,6 +2,7 @@ from easydict import EasyDict as edict
 
 config = edict()
 config.dataset = "webface"
+config.img_size = 112
 config.embedding_size = 512
 config.sample_rate = 1
 config.fp16 = False  # False
@@ -9,7 +10,7 @@ config.momentum = 0.9
 config.weight_decay = 5e-4
 config.batch_size = 64
 config.lr = 0.1  # batch size is 512
-config.output = "webface"
+config.output = "webface-iresnet34"
 
 if config.dataset == "glint360k":
     # make training faster

@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 
+__all__ = ['cosloss', 'arcloss']
+
 
 class CosFace(nn.Module):
     def __init__(self, s=64.0, m=0.40):
@@ -17,6 +19,10 @@ class CosFace(nn.Module):
         return ret
 
 
+def cosloss(s=64., m=0.4):
+    return CosFace(s, m)
+
+
 class ArcFace(nn.Module):
     def __init__(self, s=64.0, m=0.5):
         super(ArcFace, self).__init__()
@@ -31,3 +37,7 @@ class ArcFace(nn.Module):
         cosine[index] += m_hot
         cosine.cos_().mul_(self.s)
         return cosine
+
+
+def arcloss(s=64., m=0.5):
+    return ArcFace(s, m)

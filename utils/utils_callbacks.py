@@ -7,7 +7,7 @@ import torch
 
 from eval import verification
 from utils.utils_logging import AverageMeter
-from partial_fc import PartialFC
+from utils.fc.partial_fc import PartialFC
 
 
 class CallBackVerification(object):
@@ -83,7 +83,7 @@ class CallBackLogging(object):
                         speed_total, loss.avg, epoch, global_step, grad_scaler.get_scale(), time_for_end
                     )
                 else:
-                    msg = "Speed %.2f samples/sec   Loss %.4f   Epoch: %d   Global Step: %d   Required: %1.f hours" % (
+                    msg = "Speed %.2f samples/sec   Loss %.4f   Epoch: %d   Global Step: %d   Required: %1.1f hours" % (
                         speed_total, loss.avg, epoch, global_step, time_for_end
                     )
                 logging.info(msg)

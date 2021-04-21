@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 
 class BackgroundGenerator(threading.Thread):
-    def __init__(self, generator, local_rank, max_prefetch=6):
+    def __init__(self, generator, local_rank, max_prefetch=8):
         super(BackgroundGenerator, self).__init__()
         self.queue = Queue.Queue(max_prefetch)
         self.generator = generator
