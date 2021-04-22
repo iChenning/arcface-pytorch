@@ -140,7 +140,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch ArcFace Training')
     parser.add_argument('--txt_path', type=str, default='data_list/train_CASIA-WebFace_list.txt')
     parser.add_argument('--local_rank', type=int, default=0, help='local_rank')
-    parser.add_argument('--network', type=str, default='mobilev3', help='backbone network')
+    parser.add_argument('--network', type=str, default='iresnet50', help='backbone network')
     parser.add_argument('--loss', type=str, default='cosloss', help='loss function')
     parser.add_argument('--resume', type=int, default=0, help='model resuming')
     args_ = parser.parse_args()
