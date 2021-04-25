@@ -9,7 +9,7 @@ import from https://github.com/tonylins/pytorch-mobilenet-v2
 import torch.nn as nn
 import math
 
-__all__ = ['mobilenetv2']
+__all__ = ['mobilev2']
 
 
 def _make_divisible(v, divisor, min_value=None):
@@ -144,7 +144,7 @@ class MobileNetV2(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
-def mobilenetv2(**kwargs):
+def mobilev2(**kwargs):
     """
     Constructs a MobileNet V2 model
     """
@@ -153,6 +153,6 @@ def mobilenetv2(**kwargs):
 if __name__ == '__main__':
     from thop import profile
     import torch
-    net = mobilenetv2(width_mult=0.1)
+    net = mobilev2(width_mult=0.1)
     flops, params = profile(net, inputs=(torch.rand(1,3, 224, 224),))
     print('flops:', flops, 'params:', params)
