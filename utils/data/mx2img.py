@@ -1,6 +1,5 @@
 import cv2
 from eval import verification
-import cv2
 import os
 import argparse
 from tqdm import tqdm
