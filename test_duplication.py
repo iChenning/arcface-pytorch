@@ -75,7 +75,9 @@ def main(args):
     s_argmax = s.argmax(axis=1)
     s_max = s.max(axis=1)
     s_new = np.concatenate((s_max[np.newaxis, :], s_argmax[np.newaxis, :]), axis=0)
-    r_ = os.path.join(args.save_root, os.path.split(os.path.split(args.resume)[0])[-1])
+    r_ = os.path.join(args.save_root, os.path.split(os.path.split(args.resume)[0])[-1]) + args.note_info
+    if not os.path.exists(r_):
+        os.makedirs(r_)
     r_2 = args.san_1920_dir
     for i in range(s.shape[0]):
         if s_max[i] > args.threshold:
@@ -106,11 +108,13 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch ArcFace Training')
 
-    parser.add_argument('--network', type=str, default='se_iresnet100', help='backbone network')
-    parser.add_argument('--resume', type=str, default=r'E:\pre-models\glint360k-se_iresnet100\backbone.pth')
+    parser.add_argument('--network', type=str, default='iresnet50', help='backbone network')
+    parser.add_argument('--resume', type=str, default=r'E:\pre-models\glint360k-iresnet50\backbone.pth')
     parser.add_argument('--txt_dir', type=str, default='data_list/san_results-single-alig.txt')
+    # parser.add_argument('--txt_dir', type=str, default='data_list/san_FaceID-alig.txt')
 
     parser.add_argument('--save_root', type=str, default=r'E:\dup')
+    parser.add_argument('--note_info', type=str, default='')
     parser.add_argument('--san_1920_dir', type=str, default=r'E:\datasets\san_1920')
     parser.add_argument('--threshold', type=float, default=0.55)
 

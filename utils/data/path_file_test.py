@@ -41,8 +41,8 @@ def main(args):
 
 if __name__ == '__main__':
     parse = argparse.ArgumentParser()
-    parse.add_argument('--folder_dir', type=str, default=r'E:\datasets\san_FaceID-alig')
-    parse.add_argument('--txt_dir', type=str, default='data_list/san_FaceID-alig.txt', help='work root is arcface_torch')
+    parse.add_argument('--folder_dir', type=str, default=r'E:\datasets\faces-recognition_test\1-N\3W-alig')
+    parse.add_argument('--txt_dir', type=str, default='data_list/test_1-N_3W-alig.txt', help='work root is arcface_torch')
 
     args = parse.parse_args()
     main(args)

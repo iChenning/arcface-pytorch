@@ -8,8 +8,8 @@ config.sample_rate = 1
 config.fp16 = False  # False
 config.momentum = 0.9
 config.weight_decay = 5e-4
-config.lr = 0.0001  # bs is 512
-config.output = config.dataset + "-se_iresnet100"
+config.lr = 0.1  # bs is 512
+config.output = config.dataset + "-se_iresnet100-new"
 
 if config.dataset == "glint360k":
     # make training faster
@@ -18,7 +18,7 @@ if config.dataset == "glint360k":
     config.rec = '/data/cve_data/glint360/glint360_data/'
     config.num_classes = 360232
     config.num_image = 17091657
-    config.num_epoch = 5  # 40
+    config.num_epoch = 20  # 40
     config.warmup_epoch = -1
     config.val_targets = ["lfw", "cfp_fp", "agedb_30"]
     config.dropout = 0.0
@@ -26,7 +26,7 @@ if config.dataset == "glint360k":
 
     def lr_step_func(epoch):
         return ((epoch + 1) / (4 + 1)) ** 2 if epoch < config.warmup_epoch else 0.1 ** len(
-            [m for m in [3] if m - 1 <= epoch])
+            [m for m in [6, 11, 15, 18] if m <= epoch])
     config.lr_func = lr_step_func
 
 elif config.dataset == "webface":
@@ -41,6 +41,6 @@ elif config.dataset == "webface":
 
     def lr_step_func(epoch):
         return ((epoch + 1) / (4 + 1)) ** 2 if epoch < config.warmup_epoch else 0.1 ** len(
-            [m for m in [40, 70, 90] if m - 1 <= epoch])
+            [m for m in [40, 70, 90] if m <= epoch])
     config.lr_func = lr_step_func
 
