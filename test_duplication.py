@@ -108,8 +108,8 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch ArcFace Training')
 
-    parser.add_argument('--network', type=str, default='iresnet50', help='backbone network')
-    parser.add_argument('--resume', type=str, default=r'E:\pre-models\glint360k-iresnet50\backbone.pth')
+    parser.add_argument('--network', type=str, default='iresnet100', help='backbone network')
+    parser.add_argument('--resume', type=str, default=r'E:\pre-models\glint360k-iresnet100\backbone.pth')
     parser.add_argument('--txt_dir', type=str, default='data_list/san_results-single-alig.txt')
     # parser.add_argument('--txt_dir', type=str, default='data_list/san_FaceID-alig.txt')
 

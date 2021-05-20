@@ -9,7 +9,7 @@ config.fp16 = False  # False
 config.momentum = 0.9
 config.weight_decay = 5e-4
 config.lr = 0.1  # bs is 512
-config.output = config.dataset + "-se_iresnet100-new"
+config.output = config.dataset + "-se_iresnet100-pruned"
 
 if config.dataset == "glint360k":
     # make training faster

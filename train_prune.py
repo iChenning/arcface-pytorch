@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torch.utils.data.distributed
 from torch.nn.utils import clip_grad_norm_
 
-import utils.backbones as backbones
+from utils.backbones.se_iresnet2 import se_iresnet100
 import utils.fc as losses
 from utils.fc.partial_fc import PartialFC
 from config import config as cfg
@@ -46,7 +46,10 @@ def main(args):
                               pin_memory=True, sampler=train_sampler, drop_last=True)
 
     # backbone and DDP
-    backbone = backbones.__dict__[args.network](pretrained=False, dropout=cfg.dropout, fp16=cfg.fp16)
+    f_ = open('../cfg/glint360k-se_iresnet100.txt')
+    cfg_ = [int(x) for x in f_.read().split()]
+    f_.close()
+    backbone = se_iresnet100(pretrained=False, dropout=cfg.dropout, fp16=cfg.fp16, cfg=cfg_)
     if args.resume:
         try:
             backbone_pth = os.path.join(cfg.output, "backbone.pth")
@@ -131,7 +134,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch ArcFace Training')
     parser.add_argument('--local_rank', type=int, default=0, help='local_rank')
-    parser.add_argument('--network', type=str, default='iresnet100', help='backbone network')
+    parser.add_argument('--network', type=str, default='se_iresnet100', help='backbone network')
     parser.add_argument('--loss', type=str, default='cosloss', help='loss function')
     parser.add_argument('--resume', type=int, default=0, help='model resuming')
     args_ = parser.parse_args()

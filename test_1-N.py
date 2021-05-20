@@ -29,14 +29,24 @@ test_trans2 = transforms.Compose([
     ])
 
 
-def extract_feats(backbone, txt_dir, bs=64):
+def extract_feats(backbone, txt_dir, bs=64, isQ=False):
     # read path
-    f_ = open(txt_dir, 'r')
-    f_paths = []
-    for line in f_.readlines():
-        line = line.replace('\n', '')
-        f_paths.append(line)
-    f_.close()
+    if isQ:
+        f_ = open(txt_dir, 'r')
+        f_paths = []
+        IDs = []
+        for line in f_.readlines():
+            words = line.replace('\n', '').split()
+            f_paths.append(words[0])
+            IDs.append(words[1])
+        f_.close()
+    else:
+        f_ = open(txt_dir, 'r')
+        f_paths = []
+        for line in f_.readlines():
+            line = line.replace('\n', '')
+            f_paths.append(line)
+        f_.close()
 
     # feats
     feats = []
@@ -62,7 +72,10 @@ def extract_feats(backbone, txt_dir, bs=64):
         feats.append(feat.cpu().data)
     feats = torch.cat(feats, 0)
     feats = F.normalize(feats)
-    return feats, f_paths
+    if isQ:
+        return feats, f_paths, IDs
+    else:
+        return feats, f_paths
 
 
 def main(args):
@@ -75,13 +88,13 @@ def main(args):
 
     # macs-params
     macs, params = profile(backbone, inputs=(torch.rand(1, 3, 112, 112).cuda(),))
-    print('macs:', macs, 'params:', params)
+    print('macs:', round(macs / 1e9, 2), 'B, params:', round(params / 1e6, 2), 'M')
 
     # key feats
-    key_feats, key_paths = extract_feats(backbone, args.key_dir, args.bs)
+    key_feats, key_paths = extract_feats(backbone, args.key_dir, args.bs, isQ=False)
 
     # query feats
-    query_feats, query_paths = extract_feats(backbone, args.query_dir, args.bs)
+    query_feats, query_paths, IDs = extract_feats(backbone, args.query_dir, args.bs, isQ=True)
 
     # similarity
     s = torch.mm(query_feats, key_feats.T)
@@ -97,6 +110,9 @@ def main(args):
     if not os.path.exists(r_):
         os.makedirs(r_)
     for i in range(s.shape[0]):
+        id = IDs[i]
+        if id in key_paths[s_argmax[i]] and s_max[i] > args.threshold:
+            continue
         if not os.path.exists(os.path.join(r_, str(i).zfill(3) + '_' + str(int(s_max[i] * 100)))):
             os.makedirs(os.path.join(r_, str(i).zfill(3) + '_' + str(int(s_max[i] * 100))))
         old_p = query_paths[i]
@@ -115,12 +131,12 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch ArcFace Training')
 
-    parser.add_argument('--network', type=str, default='se_iresnet100', help='backbone network')
-    parser.add_argument('--resume', type=str, default=r'E:\pre-models\glint360k-se_iresnet100\backbone.pth')
-    parser.add_argument('--query_dir', type=str, default='data_list/san_results-single-alig.txt')
+    parser.add_argument('--network', type=str, default='iresnet100', help='backbone network')
+    parser.add_argument('--resume', type=str, default=r'E:\pre-models\ms1mv3-iresnet100-arcloss-open\backbone.pth')
+    parser.add_argument('--query_dir', type=str, default=r'E:data_list\san_results-single-alig-ID.txt')
     parser.add_argument('--key_dir', type=str, default='data_list/san_3W.txt')
 
-    parser.add_argument('--save_root', type=str, default=r'E:\recognition')
+    parser.add_argument('--save_root', type=str, default=r'E:\results-1_N')
     parser.add_argument('--note_info', type=str, default='-3W')
     parser.add_argument('--threshold', type=float, default=0.55)
     parser.add_argument('--bs', type=int, default=12)
