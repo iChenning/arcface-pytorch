@@ -12,6 +12,7 @@ import shutil
 import os
 from tqdm import tqdm
 import math
+from utils.seed_init import rand_seed
 
 
 test_trans = transforms.Compose([
@@ -80,15 +81,20 @@ def extract_feats(backbone, txt_dir, bs=64, isQ=False):
 
 def main(args):
     # net
-    dropout = 0.4 if cfg.dataset is "webface" else 0
-    backbone = backbones.__dict__[args.network](pretrained=False, dropout=dropout, fp16=cfg.fp16)
+    if len(args.pruned_info) > 0:
+        f_ = open(args.pruned_info)
+        cfg_ = [int(x) for x in f_.read().split()]
+        f_.close()
+    else:
+        cfg_ = None
+    backbone = backbones.__dict__[args.network](dropout=cfg.dropout, fp16=cfg.fp16, cfg=cfg_)
     state_dict = load_normal(args.resume)
     backbone.load_state_dict(state_dict)
     backbone = backbone.cuda()
 
     # macs-params
     macs, params = profile(backbone, inputs=(torch.rand(1, 3, 112, 112).cuda(),))
-    print('macs:', round(macs / 1e9, 2), 'B, params:', round(params / 1e6, 2), 'M')
+    print('macs:', round(macs / 1e9, 2), 'G, params:', round(params / 1e6, 2), 'M')
 
     # key feats
     key_feats, key_paths = extract_feats(backbone, args.key_dir, args.bs, isQ=False)
@@ -112,17 +118,24 @@ def main(args):
     for i in range(s.shape[0]):
         id = IDs[i]
         if id in key_paths[s_argmax[i]] and s_max[i] > args.threshold:
-            continue
-        if not os.path.exists(os.path.join(r_, str(i).zfill(3) + '_' + str(int(s_max[i] * 100)))):
-            os.makedirs(os.path.join(r_, str(i).zfill(3) + '_' + str(int(s_max[i] * 100))))
+            r_new = os.path.join(r_, 'isAccept')
+        else:
+            if id in key_paths[s_argmax[i]]:
+                r_new = os.path.join(r_, 'isSame')
+            else:
+                r_new = os.path.join(r_, 'isDiff')
+
+        folder_ = os.path.join(r_new, str(i).zfill(3) + '_' + str(int(s_max[i] * 100)))
+        if not os.path.exists(folder_):
+            os.makedirs(folder_)
         old_p = query_paths[i]
         name_ = os.path.split(old_p)[-1]
-        new_p = os.path.join(r_, str(i).zfill(3) + '_' + str(int(s_max[i] * 100)), name_)
+        new_p = os.path.join(folder_, name_)
         shutil.copy(old_p, new_p)
 
         old_p = key_paths[s_argmax[i]]
         name_ = os.path.split(old_p)[-1]
-        new_p = os.path.join(r_, str(i).zfill(3) + '_' + str(int(s_max[i] * 100)), name_)
+        new_p = os.path.join(folder_, name_)
         shutil.copy(old_p, new_p)
 
     print('done')
@@ -131,8 +144,9 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch ArcFace Training')
 
-    parser.add_argument('--network', type=str, default='iresnet100', help='backbone network')
-    parser.add_argument('--resume', type=str, default=r'E:\pre-models\ms1mv3-iresnet100-arcloss-open\backbone.pth')
+    parser.add_argument('--network', type=str, default='se_iresnet100', help='backbone network')
+    parser.add_argument('--resume', type=str, default=r'E:\pre-models\glint360k-se_iresnet100-pruned\backbone.pth')
+    parser.add_argument('--pruned_info', type=str, default=r'E:\pruned_info\glint360k-se_iresnet100.txt')
     parser.add_argument('--query_dir', type=str, default=r'E:data_list\san_results-single-alig-ID.txt')
     parser.add_argument('--key_dir', type=str, default='data_list/san_3W.txt')
 
@@ -142,4 +156,5 @@ if __name__ == "__main__":
     parser.add_argument('--bs', type=int, default=12)
 
     args_ = parser.parse_args()
+    rand_seed()
     main(args_)

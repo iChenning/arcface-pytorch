@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 from utils.utils_callbacks import CallBackVerification, CallBackLogging, CallBackModelCheckpoint
 from utils.utils_logging import AverageMeter, init_logging
 from utils.utils_amp import MaxClipGradScaler
+from utils.seed_init import rand_seed
 
 torch.backends.cudnn.benchmark = True
 
@@ -46,7 +47,7 @@ def main(args):
                               pin_memory=True, sampler=train_sampler, drop_last=True)
 
     # backbone and DDP
-    backbone = backbones.__dict__[args.network](pretrained=False, dropout=cfg.dropout, fp16=cfg.fp16)
+    backbone = backbones.__dict__[args.network](dropout=cfg.dropout, fp16=cfg.fp16)
     if args.resume:
         try:
             backbone_pth = os.path.join(cfg.output, "backbone.pth")
@@ -135,4 +136,6 @@ if __name__ == "__main__":
     parser.add_argument('--loss', type=str, default='cosloss', help='loss function')
     parser.add_argument('--resume', type=int, default=0, help='model resuming')
     args_ = parser.parse_args()
+
+    rand_seed()
     main(args_)

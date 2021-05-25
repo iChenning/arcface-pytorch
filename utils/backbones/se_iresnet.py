@@ -49,22 +49,22 @@ class SEModule(nn.Module):
 
 class IBasicBlock(nn.Module):
     expansion = 1
-    def __init__(self, inplanes, planes, stride=1, downsample=None,
+    def __init__(self, sub_cfg, stride=1, downsample=None,
                  groups=1, base_width=64, dilation=1, reduction=16):
         super(IBasicBlock, self).__init__()
         if groups != 1 or base_width != 64:
             raise ValueError('BasicBlock only supports groups=1 and base_width=64')
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
-        self.bn1 = nn.BatchNorm2d(inplanes, eps=1e-05,)
-        self.conv1 = conv3x3(inplanes, planes)
-        self.bn2 = nn.BatchNorm2d(planes, eps=1e-05,)
-        self.prelu = nn.PReLU(planes)
-        self.conv2 = conv3x3(planes, planes, stride)
-        self.bn3 = nn.BatchNorm2d(planes, eps=1e-05,)
+        self.bn1 = nn.BatchNorm2d(sub_cfg[0], eps=1e-05, )
+        self.conv1 = conv3x3(sub_cfg[0], sub_cfg[1])
+        self.bn2 = nn.BatchNorm2d(sub_cfg[1], eps=1e-05, )
+        self.prelu = nn.PReLU(sub_cfg[1])
+        self.conv2 = conv3x3(sub_cfg[1], sub_cfg[2], stride)
+        self.bn3 = nn.BatchNorm2d(sub_cfg[2], eps=1e-05, )
         self.downsample = downsample
         self.stride = stride
-        self.se_module = SEModule(planes, reduction=reduction)
+        self.se_module = SEModule(sub_cfg[2], reduction=reduction)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
@@ -86,7 +86,7 @@ class IBasicBlock(nn.Module):
 class IResNet(nn.Module):
     fc_scale = 7 * 7
     def __init__(self,
-                 block, layers, dropout=0, num_features=512, zero_init_residual=False,
+                 block, layers, dropout=0, num_features=512, zero_init_residual=False, cfg=None,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None, fp16=False):
         super(IResNet, self).__init__()
         self.fp16 = fp16
@@ -97,30 +97,37 @@ class IResNet(nn.Module):
         if len(replace_stride_with_dilation) != 3:
             raise ValueError("replace_stride_with_dilation should be None "
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
+        if cfg is None:
+            cfg = [64] + [64] * layers[0] * 2 + [128] * layers[1] * 2 + [256] * layers[2] * 2 + [512] * layers[3] * 2
+        else:
+            cfg_ = [64] + [64] * layers[0] * 2 + [128] * layers[1] * 2 + [256] * layers[2] * 2 + [512] * layers[3] * 2
+            for i_, v_ in enumerate(cfg):
+                cfg_[i_ * 2 + 1] = v_
+            cfg = cfg_[:]
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(self.inplanes, eps=1e-05)
-        self.prelu = nn.PReLU(self.inplanes)
-        self.layer1 = self._make_layer(block, 64, layers[0], stride=2)
+        self.conv1 = nn.Conv2d(3, cfg[0], kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(cfg[0], eps=1e-05)
+        self.prelu = nn.PReLU(cfg[0])
+        self.layer1 = self._make_layer(block, layers[0], cfg[0: sum(layers[:1]) * 2 + 1], stride=2)
         self.layer2 = self._make_layer(block,
-                                       128,
                                        layers[1],
+                                       cfg[sum(layers[:1]) * 2: sum(layers[:2]) * 2 + 1],
                                        stride=2,
                                        dilate=replace_stride_with_dilation[0])
         self.layer3 = self._make_layer(block,
-                                       256,
                                        layers[2],
+                                       cfg[sum(layers[:2]) * 2: sum(layers[:3]) * 2 + 1],
                                        stride=2,
                                        dilate=replace_stride_with_dilation[1])
         self.layer4 = self._make_layer(block,
-                                       512,
                                        layers[3],
+                                       cfg[sum(layers[:3]) * 2: sum(layers[:]) * 2 + 1],
                                        stride=2,
                                        dilate=replace_stride_with_dilation[2])
-        self.bn2 = nn.BatchNorm2d(512 * block.expansion, eps=1e-05,)
+        self.bn2 = nn.BatchNorm2d(cfg[-1], eps=1e-05,)
         self.dropout = nn.Dropout(p=dropout, inplace=True)
-        self.fc = nn.Linear(512 * block.expansion * self.fc_scale, num_features)
+        self.fc = nn.Linear(cfg[-1] * block.expansion * self.fc_scale, num_features)
         self.features = nn.BatchNorm1d(num_features, eps=1e-05)
         nn.init.constant_(self.features.weight, 1.0)
         self.features.weight.requires_grad = False
@@ -137,26 +144,28 @@ class IResNet(nn.Module):
                 if isinstance(m, IBasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
 
-    def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
+    def _make_layer(self, block, blocks, sub_cfg, stride=1, dilate=False):
         downsample = None
         previous_dilation = self.dilation
         if dilate:
             self.dilation *= stride
             stride = 1
-        if stride != 1 or self.inplanes != planes * block.expansion:
+        if stride != 1:
             downsample = nn.Sequential(
-                conv1x1(self.inplanes, planes * block.expansion, stride),
-                nn.BatchNorm2d(planes * block.expansion, eps=1e-05, ),
+                conv1x1(sub_cfg[0], sub_cfg[2], stride),
+                nn.BatchNorm2d(sub_cfg[2], eps=1e-05, ),
             )
         layers = []
         layers.append(
-            block(self.inplanes, planes, stride, downsample, self.groups,
+            block(sub_cfg[0: 3], stride, downsample, self.groups,
                   self.base_width, previous_dilation))
-        self.inplanes = planes * block.expansion
-        for _ in range(1, blocks):
+        for idx in range(1, blocks):
+            # downsample = nn.Sequential(
+            #     conv1x1(sub_cfg[idx * 2: idx * 2 + 3][0], sub_cfg[idx * 2: idx * 2 + 3][2], stride=1),
+            #     nn.BatchNorm2d(sub_cfg[idx * 2: idx * 2 + 3][2], eps=1e-05, ),
+            # )
             layers.append(
-                block(self.inplanes,
-                      planes,
+                block(sub_cfg[idx * 2: idx * 2 + 3],
                       groups=self.groups,
                       base_width=self.base_width,
                       dilation=self.dilation))
@@ -180,34 +189,39 @@ class IResNet(nn.Module):
         return x
 
 
-def _iresnet(arch, block, layers, pretrained, progress, **kwargs):
+def _iresnet(arch, block, layers, **kwargs):
     model = IResNet(block, layers, **kwargs)
-    if pretrained:
-        raise ValueError()
     return model
 
 
-def se_iresnet18(pretrained=False, progress=True, **kwargs):
-    return _iresnet('iresnet18', IBasicBlock, [2, 2, 2, 2], pretrained,
-                    progress, **kwargs)
+def se_iresnet18(**kwargs):
+    return _iresnet('iresnet18', IBasicBlock, [2, 2, 2, 2], **kwargs)
 
 
-def se_iresnet34(pretrained=False, progress=True, **kwargs):
-    return _iresnet('iresnet34', IBasicBlock, [3, 4, 6, 3], pretrained,
-                    progress, **kwargs)
+def se_iresnet34(**kwargs):
+    return _iresnet('iresnet34', IBasicBlock, [3, 4, 6, 3], **kwargs)
 
 
-def se_iresnet50(pretrained=False, progress=True, **kwargs):
-    return _iresnet('iresnet50', IBasicBlock, [3, 4, 14, 3], pretrained,
-                    progress, **kwargs)
+def se_iresnet50(**kwargs):
+    return _iresnet('iresnet50', IBasicBlock, [3, 4, 14, 3], **kwargs)
 
 
-def se_iresnet100(pretrained=False, progress=True, **kwargs):
-    return _iresnet('iresnet100', IBasicBlock, [3, 13, 30, 3], pretrained,
-                    progress, **kwargs)
+def se_iresnet100(**kwargs):
+    return _iresnet('iresnet100', IBasicBlock, [3, 13, 30, 3], **kwargs)
 
 
-def se_iresnet200(pretrained=False, progress=True, **kwargs):
-    return _iresnet('iresnet200', IBasicBlock, [6, 26, 60, 6], pretrained,
-                    progress, **kwargs)
+def se_iresnet200(**kwargs):
+    return _iresnet('iresnet200', IBasicBlock, [6, 26, 60, 6], **kwargs)
 
+
+if __name__ == '__main__':
+    f_ = open(r'E:pruned_info\glint360k-se_iresnet100.txt')
+    cfg_ = [int(x) for x in f_.read().split()]
+    f_.close()
+    net = se_iresnet100(cfg=cfg_)
+    print(net)
+
+    # macs-params
+    from thop import profile
+    macs, params = profile(net, inputs=(torch.rand(1, 3, 112, 112),))
+    print('macs:', round(macs / 1e9, 2), 'G, params:', round(params / 1e6, 2), 'M')

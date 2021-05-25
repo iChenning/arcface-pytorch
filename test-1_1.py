@@ -12,6 +12,7 @@ import shutil
 import os
 from tqdm import tqdm
 import math
+from utils.seed_init import rand_seed
 
 test_trans = transforms.Compose([
     transforms.Resize((112, 112)),
@@ -100,14 +101,20 @@ def extract_feats(backbone, txt_dir, bs=64):
 
 def main(args):
     # net
-    backbone = backbones.__dict__[args.network](pretrained=False, dropout=cfg.dropout, fp16=cfg.fp16)
+    if len(args.pruned_info) > 0:
+        f_ = open(args.pruned_info)
+        cfg_ = [int(x) for x in f_.read().split()]
+        f_.close()
+    else:
+        cfg_ = None
+    backbone = backbones.__dict__[args.network](dropout=cfg.dropout, fp16=cfg.fp16, cfg=cfg_)
     state_dict = load_normal(args.resume)
     backbone.load_state_dict(state_dict)
     backbone = backbone.cuda()
 
     # macs-params
     macs, params = profile(backbone, inputs=(torch.rand(1, 3, 112, 112).cuda(),))
-    print('macs:', round(macs / 1e9, 2), 'B, params:', round(params / 1e6, 2), 'M')
+    print('macs:', round(macs / 1e9, 2), 'G, params:', round(params / 1e6, 2), 'M')
 
     # feats
     fs1, fs2, labels = extract_feats(backbone, args.txt_dir, args.bs)
@@ -139,13 +146,15 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch ArcFace Training')
 
-    parser.add_argument('--network', type=str, default='iresnet100', help='backbone network')
-    parser.add_argument('--resume', type=str, default=r'E:\pre-models\glint360k-iresnet100\backbone.pth')
+    parser.add_argument('--network', type=str, default='se_iresnet100', help='backbone network')
+    parser.add_argument('--resume', type=str, default=r'E:\pre-models\glint360k-se_iresnet100-pruned\backbone.pth')
+    parser.add_argument('--pruned_info', type=str, default=r'E:\pruned_info\glint360k-se_iresnet100.txt')
     parser.add_argument('--txt_dir', type=str, default=r'E:data_list\test-1_1-lfw.txt')
 
     parser.add_argument('--save_root', type=str, default=r'E:\results-1_1')
-    parser.add_argument('--note_info', type=str, default='')
+    parser.add_argument('--note_info', type=str, default='-pruned')
     parser.add_argument('--bs', type=int, default=6)
 
     args_ = parser.parse_args()
+    rand_seed()
     main(args_)
